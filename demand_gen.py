@@ -5,9 +5,9 @@ from datetime import datetime, timedelta
 def generate_dynamic_weekly_demand():
     # 1. Load the constant store infrastructure
     try:
-        df_stores = pd.read_csv('data/input/stores.csv')
+        df_stores = pd.read_csv('stores.csv')
     except FileNotFoundError:
-        print("❌ Error: stores.csv not found in data/input/")
+        print("❌ Error: stores.csv not found in ")
         return
 
     # 2. Conceptual Constants (The 'Physics' of your Retail Model)
@@ -68,7 +68,7 @@ def generate_dynamic_weekly_demand():
 
     # 5. Output for Universal App Processing
     df_new_week = pd.DataFrame(new_demand_rows)
-    df_new_week.to_csv('data/input/labor_demand_curve_sim.csv', index=False)
+    df_new_week.to_csv('labor_demand_curve_sim.csv', index=False)
     print(f"✅ Concept-consistent demand generated for week starting {dates[0]}.")
 
 if __name__ == "__main__":
