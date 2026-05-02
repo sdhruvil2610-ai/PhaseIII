@@ -59,7 +59,7 @@ if start_workflow:
             process.wait()
             
             st.write("📊 **Step 3:** Executing Comparative ROI Analysis...")
-            subprocess.run(["python", "impact_analyzer.py", "--demand", "data/input/labor_demand_curve_sim.csv"], check=True)
+            subprocess.run(["python", "impact_analyzer.py", "--demand", "labor_demand_curve_sim.csv"], check=True)
             time.sleep(1)
             
             status.update(label="✅ Pipeline Complete", state="complete", expanded=False)
