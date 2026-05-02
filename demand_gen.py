@@ -1,78 +1,83 @@
 import pandas as pd
 import numpy as np
-from datetime import datetime, timedelta
+import os
+import argparse
 
-def generate_dynamic_weekly_demand():
-    # 1. Load the constant store infrastructure
+# --- 1. FLAT PATHING ---
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# All files are now expected in the root directory
+OPTIMIZED_SCHED = os.path.join(BASE_DIR, 'final_network_schedule.csv')
+LEGACY_SCHED = os.path.join(BASE_DIR, 'legacy_schedule_sim.csv')
+STORES_FILE = os.path.join(BASE_DIR, 'stores.csv')
+EMP_FILE = os.path.join(BASE_DIR, 'employees.csv')
+
+def analyze_schedule(schedule_path, demand_path, prefix):
+    print(f"   ↳ Processing {prefix} metrics...")
     try:
-        df_stores = pd.read_csv('stores.csv')
-    except FileNotFoundError:
-        print("❌ Error: stores.csv not found in ")
-        return
+        # LOAD DATA DIRECTLY FROM ROOT
+        df_sched = pd.read_csv(schedule_path)
+        df_emp = pd.read_csv(EMP_FILE)
+        df_demand = pd.read_csv(demand_path)
+        df_stores = pd.read_csv(STORES_FILE)
+    except FileNotFoundError as e:
+        print(f"❌ Error: Could not find {e.filename}")
+        return False
 
-    # 2. Conceptual Constants (The 'Physics' of your Retail Model)
-    format_mult = {'Small': 0.75, 'Medium': 1.00, 'Large': 1.35}
-    day_mult = {
-        'Sunday': 1.20, 'Monday': 0.85, 'Tuesday': 0.80, 'Wednesday': 0.85, 
-        'Thursday': 0.95, 'Friday': 1.15, 'Saturday': 1.30
-    }
-    productivity = {
-        'Cashier': 40, 'Floor': 60, 'Stock': 120, 'Customer Service': 100, 'Supervisor': 250
-    }
+    # Standardize formats
+    for df in [df_sched, df_emp, df_demand, df_stores]:
+        for col in ['store_id', 'employee_id', 'role', 'assigned_role']:
+            if col in df.columns: df[col] = df[col].astype(str).str.strip()
 
-    # 3. Time Window: Sunday to Saturday
-    # We use a dynamic start date to simulate 'Next Week'
-    start_date = datetime.now() + timedelta(days=(6 - datetime.now().weekday() + 7) % 7) 
-    dates = [(start_date + timedelta(days=i)).strftime('%Y-%m-%d') for i in range(7)]
-    hours = list(range(8, 23)) # 08:00 - 22:00
+    # CRITICAL: Legacy evaluates OT > 48hrs. Optimized evaluates OT > 40hrs.
+    ot_threshold = 48 if prefix == 'legacy' else 40
 
-    new_demand_rows = []
+    wages = df_emp.set_index('employee_id')['hourly_wage_mxn'].to_dict()
+    emp_diag = df_sched.groupby('employee_id').agg({'duration': 'sum'}).reset_index()
+    emp_diag['store_id'] = emp_diag['employee_id'].map(df_emp.set_index('employee_id')['store_id'].to_dict())
+    
+    emp_diag['overtime_hours'] = emp_diag['duration'].apply(lambda x: max(0, x - ot_threshold))
+    emp_diag['regular_hours'] = emp_diag['duration'] - emp_diag['overtime_hours']
+    
+    # 2.0x Mexican Overtime Penalty
+    emp_diag['total_labor_cost_mxn'] = (emp_diag['regular_hours'] * emp_diag['employee_id'].map(wages)) + \
+                                       (emp_diag['overtime_hours'] * emp_diag['employee_id'].map(wages) * 2.0)
 
-    # 4. The Dynamic Wave Engine
-    for _, store in df_stores.iterrows():
-        f_factor = format_mult.get(store['format'], 1.0)
-        
-        for date_str in dates:
-            day_name = datetime.strptime(date_str, '%Y-%m-%d').strftime('%A')
-            d_factor = day_mult.get(day_name, 1.0)
-            
-            # Weekly Jitter: Every week has a slightly different 'vibe' (+/- 15%)
-            weekly_noise = np.random.uniform(0.85, 1.15)
-            
-            for hour in hours:
-                # Core Sinusoidal Wave[cite: 3]
-                base_traffic = 60 + 40 * np.sin(np.pi * (hour - 8) / 14)
-                
-                # Hourly Jitter: Specific hours vary randomly (+/- 10%)
-                hourly_noise = np.random.uniform(0.9, 1.1)
-                
-                # Peak Multiplier (17:00 - 20:00)[cite: 3]
-                peak_spike = 1.5 if 17 <= hour <= 20 else 1.0
-                
-                # Calculate Final Traffic
-                total_traffic = base_traffic * f_factor * d_factor * weekly_noise * hourly_noise * peak_spike
-                
-                # Convert to Staffing Requirements
-                for role, divisor in productivity.items():
-                    req_staff = int(np.ceil(total_traffic / divisor))
-                    if role == 'Supervisor':
-                        req_staff = max(1, req_staff)
-                        
-                    new_demand_rows.append({
-                        'store_id': store['store_id'],
-                        'date': date_str,
-                        'hour': hour,
-                        'role': role,
-                        'required_staff': req_staff
-                    })
+    hourly_coverage = []
+    for row in df_sched.itertuples():
+        for h in range(int(row.shift_start), int(row.shift_end)):
+            hourly_coverage.append({
+                'store_id': row.store_id, 'date': row.date, 'hour': h, 
+                'role': row.assigned_role, 'scheduled_staff': 1
+            })
+    
+    df_cov = pd.DataFrame(hourly_coverage).groupby(['store_id', 'date', 'hour', 'role'])['scheduled_staff'].sum().reset_index()
+    df_merged = pd.merge(df_demand, df_cov, on=['store_id', 'date', 'hour', 'role'], how='left').fillna({'scheduled_staff': 0})
+    
+    df_merged['overstaffed'] = (df_merged['scheduled_staff'] - df_merged['required_staff']).clip(lower=0)
+    df_merged['understaffed'] = (df_merged['required_staff'] - df_merged['scheduled_staff']).clip(lower=0)
+    
+    store_agg = df_merged.groupby('store_id').agg({
+        'required_staff': 'sum', 'scheduled_staff': 'sum', 'understaffed': 'sum', 'overstaffed': 'sum'
+    }).reset_index()
+    
+    store_costs = emp_diag.groupby('store_id')['total_labor_cost_mxn'].sum().reset_index()
+    store_diag = pd.merge(df_stores, store_agg, on='store_id')
+    store_diag = pd.merge(store_diag, store_costs, on='store_id')
+    
+    store_diag['labor_utilization_pct'] = np.where(store_diag['scheduled_staff'] > 0, 
+                                                   (store_diag['required_staff'] / store_diag['scheduled_staff']) * 100, 0)
+    
+    # SAVE TO FLAT ROOT DIRECTORY
+    store_diag.to_csv(os.path.join(BASE_DIR, f'store_diagnostics_{prefix}.csv'), index=False)
+    emp_diag.to_csv(os.path.join(BASE_DIR, f'employee_diagnostics_{prefix}.csv'), index=False)
+    return True
 
-    # 5. Output for Universal App Processing
-    df_new_week = pd.DataFrame(new_demand_rows)
-    df_new_week.to_csv('labor_demand_curve_sim.csv', index=False)
-    print(f"✅ Concept-consistent demand generated for week starting {dates[0]}.")
-
-if __name__ == "__main__":
-    generate_dynamic_weekly_demand()
-# Save directly to the root folder
-df_traffic.to_csv('labor_demand_curve_sim.csv', index=False)
-print("✅ Traffic Wave generated in root folder.")
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    # Updated to look directly in BASE_DIR for the flat architecture
+    parser.add_argument('--demand', type=str, default=os.path.join(BASE_DIR, 'labor_demand_curve_sim.csv'))
+    args = parser.parse_args()
+    
+    analyze_schedule(OPTIMIZED_SCHED, args.demand, 'optimized')
+    analyze_schedule(LEGACY_SCHED, args.demand, 'legacy')
