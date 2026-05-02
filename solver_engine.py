@@ -132,10 +132,11 @@ def run_network_optimization(demand_file):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
+    # Default to the root-level traffic file
     parser.add_argument('--input', type=str, default='labor_demand_curve_sim.csv')
-    # Use the new distinct name here
     parser.add_argument('--output', type=str, default='final_network_schedule.csv') 
     
     args = parser.parse_args()
+    # Save directly to root
     OUTPUT_FILE = os.path.join(BASE_DIR, args.output)
     run_network_optimization(args.input)
