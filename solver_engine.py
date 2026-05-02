@@ -5,15 +5,16 @@ import time
 import math
 import argparse
 
-# --- DYNAMIC PATHING ---
+# --- DYNAMIC FLAT PATHING ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-INPUT_DIR = os.path.join(BASE_DIR, 'data', 'input')
+# Removed INPUT_DIR, now saving and loading directly from BASE_DIR
 OUTPUT_FILE = os.path.join(BASE_DIR, 'optimized_schedule.csv') 
 PENALTY_RATE = 10000 
 VOLATILITY_BUFFER = 1.0
 
 def load_file(name):
-    path = os.path.join(INPUT_DIR, name) if not os.path.isabs(name) else name
+    # Now looks directly in the root folder (BASE_DIR)
+    path = os.path.join(BASE_DIR, name) if not os.path.isabs(name) else name
     if os.path.exists(path): return pd.read_csv(path)
     raise FileNotFoundError(f"Missing {path}")
 
@@ -28,7 +29,8 @@ def get_eligible_shifts(role):
 
 def run_network_optimization(demand_file):
     df_demand = load_file(demand_file)
-    df_emp = load_file('employees_phase2.csv')
+    # CORRECTED: Standardized to 'employees.csv' for Phase III flat structure
+    df_emp = load_file('employees.csv')
     
     for df in [df_demand, df_emp]:
         for col in ['store_id', 'role', 'employee_id']:
@@ -73,7 +75,7 @@ def run_network_optimization(demand_file):
                         for os_idx in opening_shifts:
                             model.AddImplication(X[(e, d, cs)], X[(e, tomorrow, os_idx)].Not())
 
-        # --- THE FIX: ADDING WAGES BACK TO OBJECTIVE ---
+        # --- WAGES AND PENALTIES IN OBJECTIVE ---
         cost_terms = []
         
         # 1. Minimize Payroll Wasted (Prioritize cheaper employees and exact hours)
