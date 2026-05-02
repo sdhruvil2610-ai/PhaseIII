@@ -3,25 +3,28 @@ import numpy as np
 import os
 import argparse
 
-# --- 1. DYNAMIC PATHING ---
+# --- 1. FLAT PATHING ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-INPUT_DIR = os.path.join(BASE_DIR, 'data', 'input')
-OUTPUT_DIR = os.path.join(BASE_DIR, 'data', 'output')
 
-# Look for the new distinct name
+# All files are now expected in the root directory
 OPTIMIZED_SCHED = os.path.join(BASE_DIR, 'final_network_schedule.csv')
 LEGACY_SCHED = os.path.join(BASE_DIR, 'legacy_schedule_sim.csv')
+STORES_FILE = os.path.join(BASE_DIR, 'stores.csv')
+EMP_FILE = os.path.join(BASE_DIR, 'employees.csv')
 
 def analyze_schedule(schedule_path, demand_path, prefix):
     print(f"   ↳ Processing {prefix} metrics...")
     try:
+        # LOAD DATA DIRECTLY FROM ROOT
         df_sched = pd.read_csv(schedule_path)
-        df_emp = pd.read_csv(os.path.join(INPUT_DIR, 'employees_phase2.csv'))
+        df_emp = pd.read_csv(EMP_FILE)
         df_demand = pd.read_csv(demand_path)
-        df_stores = pd.read_csv(os.path.join(INPUT_DIR, 'stores.csv'))
-    except FileNotFoundError:
+        df_stores = pd.read_csv(STORES_FILE)
+    except FileNotFoundError as e:
+        print(f"❌ Error: Could not find {e.filename}")
         return False
 
+    # Standardize formats
     for df in [df_sched, df_emp, df_demand, df_stores]:
         for col in ['store_id', 'employee_id', 'role', 'assigned_role']:
             if col in df.columns: df[col] = df[col].astype(str).str.strip()
@@ -65,13 +68,15 @@ def analyze_schedule(schedule_path, demand_path, prefix):
     store_diag['labor_utilization_pct'] = np.where(store_diag['scheduled_staff'] > 0, 
                                                    (store_diag['required_staff'] / store_diag['scheduled_staff']) * 100, 0)
     
-    store_diag.to_csv(os.path.join(OUTPUT_DIR, f'store_diagnostics_{prefix}.csv'), index=False)
-    emp_diag.to_csv(os.path.join(OUTPUT_DIR, f'employee_diagnostics_{prefix}.csv'), index=False)
+    # SAVE TO FLAT ROOT DIRECTORY
+    store_diag.to_csv(os.path.join(BASE_DIR, f'store_diagnostics_{prefix}.csv'), index=False)
+    emp_diag.to_csv(os.path.join(BASE_DIR, f'employee_diagnostics_{prefix}.csv'), index=False)
     return True
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--demand', type=str, default=os.path.join(INPUT_DIR, 'labor_demand_curve_sim.csv'))
+    # Updated to look directly in BASE_DIR for the flat architecture
+    parser.add_argument('--demand', type=str, default=os.path.join(BASE_DIR, 'labor_demand_curve_sim.csv'))
     args = parser.parse_args()
     
     analyze_schedule(OPTIMIZED_SCHED, args.demand, 'optimized')
