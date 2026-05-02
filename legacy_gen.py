@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 import os
 
-# Remove the INPUT_DIR and just use BASE_DIR
+# --- 1. FLAT PATHING ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 INPUT_FILE = os.path.join(BASE_DIR, 'labor_demand_curve_sim.csv')
 EMP_FILE = os.path.join(BASE_DIR, 'employees.csv') # Use your Phase I or II employee file here
@@ -21,8 +21,9 @@ def find_optimal_staffing(demands, target_level):
 def generate_legacy_schedule():
     print("🧱 Simulating Legacy 48-hour Peak-Coverage Schedule...")
     try:
-        df_demand = pd.read_csv(os.path.join(INPUT_DIR, 'labor_demand_curve_sim.csv'))
-        df_emp = pd.read_csv(os.path.join(INPUT_DIR, 'employees_phase2.csv'))
+        # CORRECTED: Now uses the flat variables defined at the top
+        df_demand = pd.read_csv(INPUT_FILE)
+        df_emp = pd.read_csv(EMP_FILE)
     except Exception as e:
         print(f"Error loading files: {e}")
         return
