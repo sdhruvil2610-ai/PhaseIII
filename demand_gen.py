@@ -73,3 +73,6 @@ def generate_dynamic_weekly_demand():
 
 if __name__ == "__main__":
     generate_dynamic_weekly_demand()
+# Save directly to the root folder
+df_traffic.to_csv('labor_demand_curve_sim.csv', index=False)
+print("✅ Traffic Wave generated in root folder.")
