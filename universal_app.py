@@ -44,7 +44,7 @@ if start_workflow:
             process = subprocess.Popen(
                 ["python", "-u", "solver_engine.py", 
                  "--input", "labor_demand_curve_sim.csv", 
-                 "--output", "final_network_schedule.csv"], # <--- NEW NAME
+                 "--output", "final_network_schedule.csv"],
                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1, universal_newlines=True
             )
             
@@ -59,6 +59,7 @@ if start_workflow:
             process.wait()
             
             st.write("📊 **Step 3:** Executing Comparative ROI Analysis...")
+            # Look for the demand file directly in the root
             subprocess.run(["python", "impact_analyzer.py", "--demand", "labor_demand_curve_sim.csv"], check=True)
             time.sleep(1)
             
@@ -73,14 +74,16 @@ st.divider()
 
 # --- EXECUTIVE DASHBOARD ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-OPT_DIAG = os.path.join(BASE_DIR, 'data', 'output', 'store_diagnostics_optimized.csv')
-LEG_DIAG = os.path.join(BASE_DIR, 'data', 'output', 'store_diagnostics_legacy.csv')
+
+# CORRECTED: All paths are now completely flat
+OPT_DIAG = os.path.join(BASE_DIR, 'store_diagnostics_optimized.csv')
+LEG_DIAG = os.path.join(BASE_DIR, 'store_diagnostics_legacy.csv')
 
 if st.session_state.get('workflow_complete', False) and os.path.exists(OPT_DIAG):
     df_opt = pd.read_csv(OPT_DIAG)
     df_leg = pd.read_csv(LEG_DIAG)
-    df_emp = pd.read_csv(os.path.join(BASE_DIR, 'data', 'output', 'employee_diagnostics_optimized.csv'))
-    df_demand = pd.read_csv(os.path.join(BASE_DIR, 'data', 'input', 'labor_demand_curve_sim.csv'))
+    df_emp = pd.read_csv(os.path.join(BASE_DIR, 'employee_diagnostics_optimized.csv'))
+    df_demand = pd.read_csv(os.path.join(BASE_DIR, 'labor_demand_curve_sim.csv'))
 
     opt_cost = df_opt['total_labor_cost_mxn'].sum()
     leg_cost = df_leg['total_labor_cost_mxn'].sum()
