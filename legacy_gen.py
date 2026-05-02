@@ -2,8 +2,10 @@ import pandas as pd
 import numpy as np
 import os
 
+# Remove the INPUT_DIR and just use BASE_DIR
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-INPUT_DIR = os.path.join(BASE_DIR, 'data', 'input')
+INPUT_FILE = os.path.join(BASE_DIR, 'labor_demand_curve_sim.csv')
+EMP_FILE = os.path.join(BASE_DIR, 'employees.csv') # Use your Phase I or II employee file here
 OUTPUT_FILE = os.path.join(BASE_DIR, 'legacy_schedule_sim.csv')
 
 def find_optimal_staffing(demands, target_level):
